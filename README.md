@@ -1,1 +1,2 @@
-# canvas-word
+# 模仿手写输入导出图片，
+    使用canvas画布实现，并导出base64位图
