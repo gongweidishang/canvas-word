@@ -1,71 +1,161 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<title>Document</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>手写输入</title>
 </head>
-<style></style>
+<style>
+    *{margin: 0;padding: 0;list-style-type: none;}
+    body{font-size: 12px;}
+    input{
+        border:solid 1px #ccc;
+        padding:5px;
+    }
+    canvas{border:solid 1px #ccc;}
+</style>
 <body>
-	<img src="1.jpg" alt="">
-	<img src="2.jpg" alt="">
-	<img src="3.jpg" alt="">
-	<canvas id='canva'></canvas>
-	<input type="button" value='合成' onclick="hecheng()">
-	<div id="box">
-		
-	</div>
-</body>
+    <canvas id='enterId' width="400" height="300"></canvas>
+    <input type="button" value='全部清楚' onclick="hw.clearAll()">
+    <input type="button" value='清除上一笔' onclick="hw.clearPrev()">
+    <input type="button" value="导出图片" onclick="hw.showPic()">
+    <img src="" alt="" id='showImg' style='width:300px;height:300px;'>
+    <div></div>
 <script>
+    function handEnter(){
+        this.canvas = document.getElementById("enterId");
+        this.ctx = this.canvas.getContext("2d");
+        // this.ctx.fillStyle = "rgba(0,0,0,0.25)";
+        this.ctx.fillStyle = '#333';
 
-	
 
+        let img = new Image(); 
+        let that = this;
+        img.src = "car2.jpg";  
+        img.style.width = '400px';
+        img.style.height = '300px';
+        // img.onload =  function(){ 
+        //     let bg = that.ctx.createPattern(img,"no-repeat"); 
+        //     that.ctx.fillStyle = bg;  
+        //     that.ctx.fillRect(0,0,400,400);  
+        // }  
 
-		function hecheng(){
+        this.canvas.addEventListener('touchstart',this.downEvent.bind(this),false);
+        this.canvas.addEventListener('touchmove',this.moveEvent.bind(this),false);
+        this.canvas.addEventListener('touchend',this.upEvent.bind(this),false);
+        this.canvas.addEventListener('contextmenu',function(e){e.preventDefault()},false);
 
-			draw(function(){
-				document.getElementById('box').innerHTML='<p style="padding:10px 0">合成图片成功！可以鼠标另存图片查看我是否是一张图片~~！</p><img src="'+base64[0]+'">';
-			})
+        this.moveFlag = false;
+        this.upof = {};
+        this.radius = 0;
+        this.has = [];
+        this.startOf = null;
+        this.lineMax = 30;
+        this.lineMin = 1;
+        this.linePressure = 1;
+        this.smoothness = 80;
+        this.history = [];
+    }
 
-		}
+    handEnter.prototype.showPic = function(){
 
-		var data=['1.jpg','2.jpg','3.jpg'],base64=[];
+        let imgData = this.canvas.toDataURL("image/jpg");
+        document.getElementById('showImg').setAttribute('src',imgData)
+        
+    }
 
-		function draw(fn){
+    handEnter.prototype.clearAll = function(){
+        this.history = [];  //清空历史步骤
+        this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
 
-			var c=document.createElement('canvas'),
+    }
+    handEnter.prototype.clearPrev = function(){
+        this.history.pop();  //清空上一步
+        this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+        for(let i=0;i<this.history.length;i++){
+            let h = this.history[i];
+            for(let j=0;j<h.length;j+=3){
+                this.ctx.beginPath();
+                this.ctx.arc(h[j],h[j+1],h[j+2],0,2*Math.PI,true);
+                this.ctx.fill();
+            
+            }
+        }
+       
+    }
 
-			ctx=c.getContext('2d'),
+    handEnter.prototype.downEvent = function(e){
+        this.moveFlag = true;
+        this.has = [];
+        this.history.push([]) //第一次注入历史笔画
+        this.upof = this.getXY(e);
+        this.startOf = this.upof;
+    }
+    handEnter.prototype.moveEvent = function(e){
+        if(!this.moveFlag)
+        return;
+        e.preventDefault();
+        let of = this.getXY(e);
+        let up = this.upof;
+        let ur = this.radius;
+        this.has.unshift({time:new Date().getTime(),dis:this.distance(up,of)});
 
-			len=data.length;
+        let dis = 0;
+        let time = 0;
+        for(var n=0;n<this.has.length-1;n++){
+            dis += this.has[n].dis;
+            time += this.has[n].time-this.has[n+1].time;
+            if(dis > this.smoothness)
+                break;
+        }
+        let or = Math.min(time/dis*this.linePressure+this.lineMin,this.lineMax)/2;
+        this.radius = or;
+        this.upof = of;
+        if(dis < 7)
+            return;
+        if(this.startOf){
+            up = this.startOf;
+            ur = or;
+            this.startOf = null;
+        }
 
-			c.width=290;
+        let len = Math.ceil(this.distance(up,of)/2)
+        for(let i=0;i<len;i++){
+            let x = up.x + (of.x-up.x)/len*i;
+            let y = up.y + (of.y-up.y)/len*i;
+            let r = ur + (or-ur)/len*i;
+            this.ctx.beginPath();
+            this.ctx.arc(x,y,r,0,2*Math.PI,true);
+            this.ctx.fill();
+            this.history[this.history.length - 1].push(x,y,r);
+        }
+    }
+    handEnter.prototype.upEvent = function(e){
+        this.moveFlag = false;
+    }
+    handEnter.prototype.getXY = function(e){
+        let x = e.touches[0].clientX;
+        let y = e.touches[0].clientY;
 
-			c.height=290;
+        
+        return {
+            x : x - this.canvas.offsetLeft + (document.body.scrollLeft || document.documentElement.scrollLeft),
+            y : y - this.canvas.offsetTop + (document.body.scrollTop || document.documentElement.scrollTop)
+        }
+    }
+    handEnter.prototype.distance = function(a,b){
+        let x = b.x-a.x;
+        let y = b.y-a.y;
+        let res = x*x+y*y;
+        return Math.sqrt(res);
+    }
+    let hw = new handEnter();
+    hw.lineMax = 40;
+    hw.lineMin = 5;
+    hw.linePressure = 3.1;
+    hw.smoothness = 100;
 
-			ctx.rect(0,0,c.width,c.height);
-
-			ctx.fillStyle='#fff';
-
-			ctx.fill();
-			function drawing(n,site){
-
-				if(n<len){
-
-					var img=new Image;
-
-					img.src=data[n];
-					img.onload=function(){
-					ctx.drawImage(img,0,0,290,290);
-						drawing(n+1,site);//递归
-					}
-				}else{
-					//保存生成作品图片
-					base64.push(c.toDataURL("image/jpeg",0.8));
-					fn();
-				}
-			}
-			drawing(0);
-
-		}
 </script>
+</body>
 </html>
